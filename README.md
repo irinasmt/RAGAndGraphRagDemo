@@ -127,14 +127,6 @@ This uses a hybrid retrieval pattern where both graph subgraph results and vecto
 
 This implementation uses an LLM to decide between graph or vector search (not both).
 
-### Optional: LlamaIndex Graph RAG (build graph from PDFs)
-
-This approach builds a knowledge graph directly from resume PDFs via LlamaIndex. It is **not recommended** for demo use — entity extraction is unpredictable, produces duplicate/inconsistent nodes, and is hard to validate.
-
-The `llamaindex/` folder and its scripts have been removed in favour of the deterministic JSON → graph approach in `data_ingestion/`.
-
----
-
 ## Environment
 
 Expected `.env` values:
@@ -152,58 +144,3 @@ Neo4j expected at:
 
 - Browser: `http://localhost:7474`
 - Bolt: `bolt://localhost:7687`
-
-## Trials & Errors (What We Learned)
-
-### 1) PDF ingestion “worked”… but returned garbage
-
-**Symptom:** Vector search answers were nonsensical (“no Python developers”), and retrieved chunks contained PDF structure/metadata instead of resume text.
-
-**Root cause:** LlamaIndex’s default directory reader didn’t reliably extract text from PDFs in our setup,and my lack of knowledge in llamaindex
-
-**Fix:** Switched to a dedicated PDF text reader (`PyMuPDFReader`), which produced real textual content for embeddings.
-
----
-
-### 2) Embeddings model choice impacted both quality and cost
-
-We experimented with:
-
-- Local embeddings (free) vs Gemini embeddings (paid)
-- Gemini LLM for generation
-
-**Trade-off:** Gemini embeddings can improve quality but are billable. Local embeddings avoid embedding costs.
-
----
-
-### 3) LlamaIndex “Graph RAG directly from PDFs” was not dependable here
-
-**Symptom:** Asking “How many Python developers?” via the LlamaIndex knowledge graph path returned drastically incorrect counts.
-
-**Why it happens:** Automatic entity/relationship extraction from raw text can be inconsistent (duplicates, missed entities, schema drift). It’s hard to validate/repair before data hits the graph.
-
-**Decision:** Don’t build the graph from raw PDFs for the demo. Instead, extract structured entities first.
-
----
-
-### 4) The winning pattern: JSON first → Graph second
-
-We saw a much more reliable pattern in `neo4j-employee-graph/`:
-
-1. Extract structured entities/relations into JSON (`extracted-people-data.json`).
-2. Create graph nodes and relationships deterministically using Cypher.
-
-**Benefit:** Stable schema + accurate counts (e.g., Python developers = 28), and predictable queries.
-
----
-
-### 6) “Text-to-Cypher” needs guardrails
-
-When using an LLM to generate Cypher, you need:
-
-- schema context
-- strict output format (JSON only)
-- robust parsing (handle code fences)
-- fallback strategy (vector search) if graph query fails
-
----
